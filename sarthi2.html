@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sarthi: Hyper-Realistic Companion Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+        .control-panel { pointer-events: auto; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(15px); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 1rem; padding: 1.5rem; width: 320px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+        .btn-action { display: block; width: 100%; padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(30, 41, 59, 0.6); color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 0.5rem; text-align: left; font-weight: 600; transition: all 0.2s; cursor: pointer; display: flex; align-items: center; }
+        .btn-action:hover, .btn-action.active { background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.8); color: #38bdf8; transform: translateX(5px); box-shadow: 0 0 15px rgba(56, 189, 248, 0.3); }
+        .btn-icon { width: 24px; height: 24px; margin-right: 12px; background-color: rgba(56, 189, 248, 0.2); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+        
+        #speech-bubble {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9); border: 2px solid #0ea5e9;
+            color: #fff; padding: 1rem 2rem; border-radius: 2rem; font-size: 1.25rem;
+            pointer-events: none; opacity: 0; transition: opacity 0.3s;
+            box-shadow: 0 0 30px rgba(14, 165, 233, 0.5); text-align: center; font-weight: 500;
+        }
+        
+        .hud-text { font-family: monospace; color: #38bdf8; font-size: 0.85rem; letter-spacing: 1px; }
+        
+        #loader { position: absolute; top:0; left:0; width: 100%; height: 100%; background: #050505; z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #38bdf8; transition: opacity 1.5s; }
+        .spinner { width: 60px; height: 60px; border: 3px solid rgba(56, 189, 248, 0.1); border-radius: 50%; border-top-color: #0ea5e9; animation: spin 1s ease-in-out infinite; margin-bottom: 20px; box-shadow: 0 0 20px rgba(14,165,233,0.5); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <h2 class="text-2xl font-bold tracking-widest uppercase text-white">Initializing Sarthi OS</h2>
+        <p class="mt-2 text-sky-400 font-mono text-sm">Rendering Hyper-Realistic Digital Twin...</p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer" class="p-6">
+        <div class="flex justify-between items-start w-full">
+            <div class="control-panel">
+                <div class="flex items-center mb-6">
+                    <div class="w-3 h-3 bg-sky-400 rounded-full animate-pulse mr-3" style="box-shadow: 0 0 10px #38bdf8;"></div>
+                    <h1 class="text-xl font-bold text-white tracking-wider">SARTHI<span class="text-sky-400 text-sm ml-2">v3.0 (Real)</span></h1>
+                </div>
+                
+                <h3 class="hud-text mb-3 border-b border-slate-700 pb-1">BEHAVIORAL SYNERGIES</h3>
+                
+                <button class="btn-action active" onclick="setAction('idle')">
+                    <span class="btn-icon">04</span> Humanoid Structure (Idle)
+                </button>
+                <button class="btn-action" onclick="setAction('walk')">
+                    <span class="btn-icon">03</span> Bipedal Walking
+                </button>
+                <button class="btn-action" onclick="setAction('run')">
+                    <span class="btn-icon">02</span> Dynamic Running
+                </button>
+                <button class="btn-action" onclick="setAction('grab')">
+                    <span class="btn-icon">01</span> Grab Object
+                </button>
+                <button class="btn-action" onclick="setAction('talk')">
+                    <span class="btn-icon">05</span> Talk / Express
+                </button>
+                <button class="btn-action" onclick="setAction('sit')">
+                    <span class="btn-icon">06</span> Setting (Sit/Stand)
+                </button>
+                <button class="btn-action" onclick="setAction('neck')">
+                    <span class="btn-icon">07</span> Rotate Neck
+                </button>
+                <button class="btn-action" onclick="setAction('turn')">
+                    <span class="btn-icon">08</span> Human-like Turn
+                </button>
+            </div>
+            
+            <div class="control-panel" style="width: 280px;">
+                <h3 class="hud-text mb-2">SYSTEM TELEMETRY</h3>
+                <div class="text-slate-300 text-sm font-mono space-y-2">
+                    <div class="flex justify-between"><span>Status:</span> <span class="text-green-400">ONLINE</span></div>
+                    <div class="flex justify-between"><span>State:</span> <span id="tel-state" class="text-sky-400">IDLE</span></div>
+                    <div class="flex justify-between"><span>Cervical Yaw:</span> <span id="tel-yaw">0.00°</span></div>
+                    <div class="flex justify-between"><span>Object Dist:</span> <span id="tel-dist">N/A</span></div>
+                    <div class="flex justify-between"><span>Core Temp:</span> <span id="tel-temp" class="text-red-400">42°C</span></div>
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-700">
+                    <p class="text-xs text-slate-400">Drag to rotate camera. Scroll to zoom.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="speech-bubble">
+            <span id="speech-text"></span>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. PROCEDURAL LAB ENVIRONMENT MAP (CRITICAL FOR REALISTIC CHROME) ---
+        function createLabEnvironment() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            // Lab walls/floor gradient
+            const grd = ctx.createLinearGradient(0, 0, 0, 512);
+            grd.addColorStop(0, "#d1d5db"); // light ceiling
+            grd.addColorStop(0.4, "#f3f4f6"); // walls
+            grd.addColorStop(0.5, "#475569"); // horizon line
+            grd.addColorStop(1, "#0f172a");   // dark reflective floor
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, 1024, 512);
+            
+            // Draw overhead rectangular lab lights (gives beautiful reflections on metal)
+            ctx.fillStyle = "#ffffff";
+            for(let i=0; i<5; i++) {
+                ctx.fillRect(100 + i*200, 50, 120, 60);
+                // Add soft glow around lights
+                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 20;
+                ctx.fillRect(100 + i*200, 50, 120, 60);
+                ctx.shadowBlur = 0;
+            }
+            
+            // Draw some glowing blue screens in the background
+            ctx.fillStyle = "#0ea5e9";
+            ctx.fillRect(800, 200, 100, 50);
+            ctx.fillStyle = "#38bdf8";
+            ctx.fillRect(100, 220, 80, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            return texture;
+        }
+
+        const envMap = createLabEnvironment();
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#0f172a'); // Dark lab background
+        scene.environment = envMap; // Apply procedural reflections globally
+        scene.fog = new THREE.FogExp2('#0f172a', 0.03);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(4, 3, 6);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 1.0, 0);
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+        // --- LIGHTING ---
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 10, 3);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.1;
+        dirLight.shadow.camera.far = 20;
+        dirLight.shadow.camera.top = 4;
+        dirLight.shadow.camera.bottom = -4;
+        dirLight.shadow.camera.left = -4;
+        dirLight.shadow.camera.right = 4;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight);
+
+        // Fill light to reveal dark areas
+        const fillLight = new THREE.DirectionalLight(0xaaddff, 0.5);
+        fillLight.position.set(-5, 3, 5);
+        scene.add(fillLight);
+
+        // --- ENVIRONMENT (Lab Floor) ---
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0x111827, 
+            roughness: 0.1, // Highly polished
+            metalness: 0.8,
+            envMap: envMap
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(30, 60, 0x0ea5e9, 0x1e293b);
+        grid.position.y = 0.01;
+        grid.material.opacity = 0.15;
+        grid.material.transparent = true;
+        scene.add(grid);
+
+        // --- MATERIALS (Matching Reference Exactly) ---
+        const matSilver = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff, metalness: 1.0, roughness: 0.15, envMap: envMap 
+        });
+        const matDark = new THREE.MeshStandardMaterial({ 
+            color: 0x111111, metalness: 0.6, roughness: 0.7 
+        });
+        const matBlack = new THREE.MeshStandardMaterial({ 
+            color: 0x000000, metalness: 0.8, roughness: 0.1 
+        });
+        const matGlow = new THREE.MeshStandardMaterial({ 
+            color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 2.5 
+        });
+        // Special material for the transparent abdomen
+        const matGlass = new THREE.MeshPhysicalMaterial({
+            color: 0x000000, metalness: 0.9, roughness: 0.05,
+            transmission: 0.8, transparent: true, envMap: envMap
+        });
+        const matRedGlow = new THREE.MeshStandardMaterial({
+            color: 0xff0000, emissive: 0xff3300, emissiveIntensity: 2.0
+        });
+
+
+        // Helper to create joint glow rings
+        function createJointRing(radius) {
+            const glow = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.012, 16, 32), matGlow);
+            glow.rotation.x = Math.PI / 2;
+            return glow;
+        }
+
+        // --- ROBOT KINEMATIC TREE (Hyper-Detailed) ---
+        const robot = new THREE.Group();
+        scene.add(robot);
+
+        // 1. Pelvis / Hips
+        const pelvis = new THREE.Group();
+        pelvis.position.y = 1.05;
+        robot.add(pelvis);
+        
+        const pelvisCore = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.2, 32), matDark);
+        pelvisCore.rotation.z = Math.PI/2;
+        pelvis.add(pelvisCore);
+        
+        const pelvisArmor = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.22), matSilver);
+        pelvisArmor.position.y = 0.02;
+        // Tapering the box slightly for aerodynamics
+        const positions = pelvisArmor.geometry.attributes.position;
+        for(let i=0; i<positions.count; i++) {
+            if(positions.getY(i) < 0) {
+                positions.setX(i, positions.getX(i) * 0.8);
+            }
+        }
+        pelvisArmor.castShadow = true;
+        pelvis.add(pelvisArmor);
+
+        // 2. Torso (Spine & Chest)
+        const torsoJoint = new THREE.Group();
+        torsoJoint.position.y = 0.15;
+        pelvis.add(torsoJoint);
+
+        // Abdomen (Glass exposing red core)
+        const abdomenGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.3, 32), matGlass);
+        abdomenGlass.position.y = 0.15;
+        abdomenGlass.castShadow = true;
+        torsoJoint.add(abdomenGlass);
+        
+        const abdomenCore = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 16), matDark);
+        abdomenCore.position.y = 0.15;
+        torsoJoint.add(abdomenCore);
+        
+        // Red glowing internals
+        const coreLight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.1), matRedGlow);
+        coreLight.position.set(0, 0.15, 0.05);
+        torsoJoint.add(coreLight);
+
+        // Chest Plate (Muscular Silver Armor)
+        const chest = new THREE.Group();
+        chest.position.y = 0.45;
+        torsoJoint.add(chest);
+        
+        const chestMain = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.28), matSilver);
+        // Taper bottom of chest
+        const cPos = chestMain.geometry.attributes.position;
+        for(let i=0; i<cPos.count; i++) {
+            if(cPos.getY(i) < 0) cPos.setX(i, cPos.getX(i) * 0.8);
+        }
+        chestMain.castShadow = true;
+        chest.add(chestMain);
+
+        // Chest Holographic Interface (Blueprint)
+        const chestDisplay = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.12), matGlow);
+        chestDisplay.position.set(0, 0.02, 0.141);
+        chest.add(chestDisplay);
+
+        // 3. Neck & Head (Strict Facial Consistency)
+        const neckJoint = new THREE.Group();
+        neckJoint.position.y = 0.18;
+        chest.add(neckJoint);
+        
+        const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.12, 32), matDark);
+        neckMesh.position.y = 0.06;
+        neckJoint.add(neckMesh);
+
+        const headJoint = new THREE.Group();
+        headJoint.position.y = 0.12;
+        neckJoint.add(headJoint);
+
+        // --- FACE CONSTRUCTION ---
+        // Cranium (Silver Dome)
+        const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), matSilver);
+        cranium.scale.set(1, 1.1, 1.1); // Elongated slightly backwards
+        cranium.position.set(0, 0.12, 0);
+        cranium.castShadow = true;
+        headJoint.add(cranium);
+
+        // Cheeks/Side of face
+        const cheeks = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.12), matSilver);
+        cheeks.position.set(0, 0.07, 0.06);
+        // Taper jawline
+        const chkPos = cheeks.geometry.attributes.position;
+        for(let i=0; i<chkPos.count; i++) {
+            if(chkPos.getY(i) < 0) chkPos.setX(i, chkPos.getX(i) * 0.7);
+        }
+        headJoint.add(cheeks);
+
+        // Eye Socket Area (Recessed Dark Area)
+        const eyeSocket = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.13), matDark);
+        eyeSocket.position.set(0, 0.12, 0.06);
+        headJoint.add(eyeSocket);
+
+        // Eyes (Black Sensors)
+        const eyeGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.02, 16);
+        const eyeR = new THREE.Mesh(eyeGeo, matBlack);
+        eyeR.rotation.z = Math.PI/2; eyeR.rotation.y = Math.PI/8;
+        eyeR.position.set(0.04, 0.12, 0.125);
+        headJoint.add(eyeR);
+        
+        const eyeL = new THREE.Mesh(eyeGeo, matBlack);
+        eyeL.rotation.z = Math.PI/2; eyeL.rotation.y = -Math.PI/8;
+        eyeL.position.set(-0.04, 0.12, 0.125);
+        headJoint.add(eyeL);
+
+        // Nose Bridge (Silver)
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.04), matSilver);
+        nose.position.set(0, 0.09, 0.125);
+        nose.rotation.x = Math.PI/6;
+        headJoint.add(nose);
+
+        // Ears / Temples (Glowing Blue Nodes as per reference)
+        const earR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 32), matSilver);
+        earR.rotation.z = Math.PI/2; earR.position.set(0.12, 0.12, 0);
+        headJoint.add(earR);
+        const earRingR = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 16, 32), matGlow);
+        earRingR.rotation.y = Math.PI/2; earRingR.position.set(0.12, 0.12, 0);
+        headJoint.add(earRingR);
+
+        const earL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 32), matSilver);
+        earL.rotation.z = Math.PI/2; earL.position.set(-0.12, 0.12, 0);
+        headJoint.add(earL);
+        const earRingL = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 16, 32), matGlow);
+        earRingL.rotation.y = Math.PI/2; earRingL.position.set(-0.12, 0.12, 0);
+        headJoint.add(earRingL);
+
+        // Articulated Jaw (For talking)
+        const jawBaseY = 0.02;
+        const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.1), matSilver);
+        jaw.position.set(0, jawBaseY, 0.08);
+        headJoint.add(jaw);
+
+
+        // --- 4. ARMS & HANDS ---
+        function createArm(isLeft) {
+            const sign = isLeft ? 1 : -1;
+            
+            // Shoulder Joint
+            const shoulder = new THREE.Group();
+            shoulder.position.set(sign * 0.26, 0.05, 0);
+            chest.add(shoulder);
+            
+            const shJoint = new THREE.Mesh(new THREE.SphereGeometry(0.08, 32, 32), matDark);
+            shoulder.add(shJoint);
+            const shRing = createJointRing(0.085);
+            shRing.rotation.x = 0; shRing.rotation.y = Math.PI/2;
+            shoulder.add(shRing);
+
+            // Pauldron (Shoulder Armor)
+            const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.11, 32, 16, 0, Math.PI), matSilver);
+            pauldron.rotation.x = Math.PI/2;
+            pauldron.rotation.z = isLeft ? -Math.PI/4 : Math.PI/4;
+            pauldron.position.y = 0.02;
+            pauldron.castShadow = true;
+            shoulder.add(pauldron);
+
+            // Upper Arm
+            const upperArm = new THREE.Group();
+            shoulder.add(upperArm);
+            
+            const uaCore = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.28, 16), matDark);
+            uaCore.position.y = -0.16;
+            upperArm.add(uaCore);
+            
+            // Upper Arm Armor Plates
+            const uaArmor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.12), matSilver);
+            uaArmor.position.y = -0.16;
+            uaArmor.castShadow = true;
+            upperArm.add(uaArmor);
+
+            // Elbow
+            const elbow = new THREE.Group();
+            elbow.position.y = -0.32;
+            upperArm.add(elbow);
+            
+            const elJoint = new THREE.Mesh(new THREE.SphereGeometry(0.06, 32, 32), matDark);
+            elbow.add(elJoint);
+            const elRing = createJointRing(0.065);
+            elRing.rotation.x = 0; elRing.rotation.y = Math.PI/2;
+            elbow.add(elRing);
+
+            // Forearm
+            const lowerArm = new THREE.Group();
+            elbow.add(lowerArm);
+            
+            const laCore = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.28, 16), matDark);
+            laCore.position.y = -0.16;
+            lowerArm.add(laCore);
+            
+            const laArmor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.24, 0.1), matSilver);
+            laArmor.position.y = -0.15;
+            // Taper forearm
+            const laPos = laArmor.geometry.attributes.position;
+            for(let i=0; i<laPos.count; i++) {
+                if(laPos.getY(i) < 0) { laPos.setX(i, laPos.getX(i)*0.7); laPos.setZ(i, laPos.getZ(i)*0.7); }
+            }
+            laArmor.castShadow = true;
+            lowerArm.add(laArmor);
+
+            // Hand & Fingers (Blueprint requested articulated fingers)
+            const hand = new THREE.Group();
+            hand.position.y = -0.32;
+            lowerArm.add(hand);
+            
+            const palm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), matDark);
+            palm.position.y = -0.04;
+            hand.add(palm);
+            
+            // Fingers
+            for(let i=0; i<3; i++) {
+                const finger = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.06, 0.02), matSilver);
+                finger.position.set(-0.025 + (i*0.025), -0.1, 0.01);
+                hand.add(finger);
+            }
+            const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.02), matSilver);
+            thumb.position.set(sign * 0.04, -0.06, 0);
+            thumb.rotation.z = sign * Math.PI/4;
+            hand.add(thumb);
+
+            return { shoulder, elbow, hand };
+        }
+
+        const { shoulder: lShoulder, elbow: lElbow } = createArm(true);
+        const { shoulder: rShoulder, elbow: rElbow, hand: rHand } = createArm(false);
+
+        // --- 5. LEGS ---
+        function createLeg(isLeft) {
+            const sign = isLeft ? 1 : -1;
+
+            // Hip Joint
+            const hip = new THREE.Group();
+            hip.position.set(sign * 0.14, -0.05, 0);
+            pelvis.add(hip);
+            
+            const hipJoint = new THREE.Mesh(new THREE.SphereGeometry(0.09, 32, 32), matDark);
+            hip.add(hipJoint);
+            const hipRing = createJointRing(0.095);
+            hipRing.rotation.x = 0; hipRing.rotation.y = Math.PI/2;
+            hip.add(hipRing);
+
+            // Thigh
+            const upperLeg = new THREE.Group();
+            hip.add(upperLeg);
+            
+            const thighCore = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 16), matDark);
+            thighCore.position.y = -0.22;
+            upperLeg.add(thighCore);
+            
+            // Bulky Thigh Armor
+            const thighArmor = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.35, 0.16), matSilver);
+            thighArmor.position.y = -0.22;
+            thighArmor.castShadow = true;
+            upperLeg.add(thighArmor);
+
+            // Knee
+            const knee = new THREE.Group();
+            knee.position.y = -0.45;
+            upperLeg.add(knee);
+            
+            const kneeJoint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 32, 32), matDark);
+            knee.add(kneeJoint);
+            const kneeRing = createJointRing(0.075);
+            kneeRing.rotation.x = 0; kneeRing.rotation.y = Math.PI/2;
+            knee.add(kneeRing);
+
+            // Shin / Calf
+            const lowerLeg = new THREE.Group();
+            knee.add(lowerLeg);
+            
+            const shinCore = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.4, 16), matDark);
+            shinCore.position.y = -0.22;
+            lowerLeg.add(shinCore);
+
+            const shinArmor = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.35, 0.14), matSilver);
+            shinArmor.position.y = -0.22;
+            // Taper to ankle
+            const shinPos = shinArmor.geometry.attributes.position;
+            for(let i=0; i<shinPos.count; i++) {
+                if(shinPos.getY(i) < 0) { shinPos.setX(i, shinPos.getX(i)*0.7); shinPos.setZ(i, shinPos.getZ(i)*0.7); }
+            }
+            shinArmor.castShadow = true;
+            lowerLeg.add(shinArmor);
+
+            // Ankle & Foot
+            const ankleRing = createJointRing(0.055);
+            ankleRing.position.y = -0.42;
+            ankleRing.rotation.x = 0; ankleRing.rotation.y = Math.PI/2;
+            lowerLeg.add(ankleRing);
+
+            const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.28), matSilver);
+            foot.position.set(0, -0.46, 0.05);
+            // Slope the foot
+            const fPos = foot.geometry.attributes.position;
+            for(let i=0; i<fPos.count; i++) {
+                if(fPos.getY(i) > 0 && fPos.getZ(i) > 0) fPos.setY(i, fPos.getY(i) - 0.04);
+            }
+            foot.castShadow = true;
+            lowerLeg.add(foot);
+
+            return { hip, knee };
+        }
+
+        const { hip: lHip, knee: lKnee } = createLeg(true);
+        const { hip: rHip, knee: rKnee } = createLeg(false);
+
+
+        // --- INTERACTIVE OBJECT (For Grabbing) ---
+        const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.7, 32), matSilver);
+        pedestal.position.set(-0.7, 0.35, 1.0);
+        pedestal.castShadow = true;
+        pedestal.receiveShadow = true;
+        scene.add(pedestal);
+
+        // Glowing power cell object
+        const grabObjGroup = new THREE.Group();
+        grabObjGroup.position.set(-0.7, 0.78, 1.0);
+        scene.add(grabObjGroup);
+        
+        const objCore = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.15, 16), matGlow);
+        grabObjGroup.add(objCore);
+        const objCasing = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.16, 8), matGlass);
+        grabObjGroup.add(objCasing);
+
+
+        // --- KINEMATICS & ANIMATION LOGIC ---
+        let currentState = 'idle';
+        let stateTime = 0;
+        const clock = new THREE.Clock();
+        
+        // Base rest pose
+        const basePose = {
+            pelvisY: 1.05, torsoX: 0, torsoY: 0,
+            headX: 0, headY: 0,
+            lShoulderX: 0, lShoulderZ: 0.15, lElbowX: -0.1,
+            rShoulderX: 0, rShoulderZ: -0.15, rElbowX: -0.1,
+            lHipX: 0, lKneeX: 0,
+            rHipX: 0, rKneeX: 0,
+            robotRotY: 0, robotZ: 0
+        };
+
+        let target = { ...basePose };
+        let objAttachedToHand = false;
+        
+        const dialogues = [
+            "Initializing vocal protocols. Identity: Sarthi v3.",
+            "Multispectral sensors optimized. Path is clear.",
+            "Analyzing core temperature and environmental data.",
+            "Facial actuation servos engaged.",
+            "Standing by to assist with physical manipulation tasks."
+        ];
+
+        window.setAction = function(action) {
+            currentState = action;
+            stateTime = 0;
+            
+            document.querySelectorAll('.btn-action').forEach(btn => btn.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.getElementById('tel-state').innerText = action.toUpperCase();
+            
+            // Drop object if holding and changing state
+            if (action !== 'grab' && objAttachedToHand) {
+                scene.add(grabObjGroup);
+                grabObjGroup.position.set(-0.7, 0.78, 1.0);
+                objAttachedToHand = false;
+            }
+            // Reset facial features
+            if (action !== 'talk') {
+                document.getElementById('speech-bubble').style.opacity = '0';
+                chestDisplay.material.emissiveIntensity = 2.5;
+                earRingR.material.emissiveIntensity = 2.5;
+                earRingL.material.emissiveIntensity = 2.5;
+                jaw.position.y = jawBaseY;
+            }
+
+            // Target Pose Definitions
+            if (action === 'sit') {
+                // Lower Pelvis, bend hips and knees exactly 90 degrees (1.5 rad)
+                target = { ...basePose, 
+                    pelvisY: 0.55, torsoX: 0.1, 
+                    lHipX: -1.5, lKneeX: 1.5,
+                    rHipX: -1.5, rKneeX: 1.5,
+                    lShoulderX: 0.2, rShoulderX: 0.2
+                };
+            } else if (action === 'idle') {
+                target = { ...basePose };
+            } else if (action === 'grab') {
+                target = { ...basePose }; 
+            } else if (action === 'talk') {
+                target = { ...basePose };
+                const text = dialogues[Math.floor(Math.random() * dialogues.length)];
+                document.getElementById('speech-text').innerText = text;
+                document.getElementById('speech-bubble').style.opacity = '1';
+            } else if (action === 'turn') {
+                target = { ...basePose }; 
+            }
+        };
+
+        function updateAnimation() {
+            const dt = clock.getDelta();
+            stateTime += dt;
+            const t = clock.getElapsedTime();
+
+            if (currentState === 'walk') {
+                const speed = 5;
+                const amp = 0.5;
+                target.pelvisY = basePose.pelvisY + Math.sin(t * speed * 2) * 0.04;
+                target.torsoX = 0.05; 
+                target.torsoY = Math.sin(t * speed) * 0.1;
+                
+                target.lHipX = Math.sin(t * speed) * amp;
+                target.lKneeX = Math.max(0, -Math.sin(t * speed + 0.5) * amp); 
+                
+                target.rHipX = Math.sin(t * speed + Math.PI) * amp;
+                target.rKneeX = Math.max(0, -Math.sin(t * speed + Math.PI + 0.5) * amp);
+                
+                target.lShoulderX = -Math.sin(t * speed) * amp * 0.5;
+                target.rShoulderX = -Math.sin(t * speed + Math.PI) * amp * 0.5;
+                target.lElbowX = -0.2; target.rElbowX = -0.2;
+                
+            } else if (currentState === 'run') {
+                const speed = 10;
+                const amp = 0.7;
+                target.pelvisY = basePose.pelvisY + Math.sin(t * speed * 2) * 0.12;
+                target.torsoX = 0.25; // Aggressive forward lean
+                
+                target.lHipX = Math.sin(t * speed) * amp;
+                target.lKneeX = Math.max(0, -Math.sin(t * speed + 0.5) * amp * 1.5);
+                
+                target.rHipX = Math.sin(t * speed + Math.PI) * amp;
+                target.rKneeX = Math.max(0, -Math.sin(t * speed + Math.PI + 0.5) * amp * 1.5);
+                
+                target.lShoulderX = -Math.sin(t * speed) * amp;
+                target.lElbowX = -1.2; 
+                target.rShoulderX = -Math.sin(t * speed + Math.PI) * amp;
+                target.rElbowX = -1.2;
+                
+            } else if (currentState === 'neck') {
+                target = { ...basePose };
+                target.headY = Math.sin(t * 2) * (Math.PI / 3); 
+                target.headX = Math.sin(t * 1.5) * (Math.PI / 6); 
+                document.getElementById('tel-yaw').innerText = (target.headY * 180 / Math.PI).toFixed(2) + '°';
+                
+            } else if (currentState === 'talk') {
+                target = { ...basePose };
+                // Facial consistency: accurate jaw movement mapping down/up
+                const jawOpen = Math.abs(Math.sin(t * 15)) * 0.03;
+                jaw.position.y = jawBaseY - jawOpen;
+                
+                // Audio synced UI/HUD glowing
+                const glowIntensity = 2.5 + Math.sin(t * 15) * 1.5;
+                chestDisplay.material.emissiveIntensity = glowIntensity;
+                earRingR.material.emissiveIntensity = glowIntensity;
+                earRingL.material.emissiveIntensity = glowIntensity;
+                target.headX = Math.sin(t * 3) * 0.05; // Natural head bob
+                
+            } else if (currentState === 'grab') {
+                target = { ...basePose };
+                if (stateTime < 1.5) {
+                    // Reaching out phase
+                    target.rShoulderX = -1.1;
+                    target.rShoulderZ = -0.3;
+                    target.rElbowX = -0.2;
+                    target.torsoX = 0.1;
+                    target.torsoY = -0.15;
+                    target.headY = -0.3; // look at object
+                } else if (stateTime < 3.0) {
+                    // Grabbing phase
+                    if (!objAttachedToHand) {
+                        rHand.add(grabObjGroup);
+                        grabObjGroup.position.set(0, -0.05, 0.05); // move into palm
+                        objAttachedToHand = true;
+                    }
+                    target.rShoulderX = -0.4;
+                    target.rShoulderZ = 0.2;
+                    target.rElbowX = -1.2; 
+                    target.headY = 0; 
+                } else if (stateTime > 5.0) {
+                    // Reset phase
+                    stateTime = 0;
+                    if(objAttachedToHand) {
+                        scene.add(grabObjGroup);
+                        grabObjGroup.position.set(-0.7, 0.78, 1.0);
+                        objAttachedToHand = false;
+                    }
+                }
+                document.getElementById('tel-dist').innerText = objAttachedToHand ? '0.00m (Attached)' : '0.45m (Tracking)';
+                
+            } else if (currentState === 'turn') {
+                // Blueprint synergy: Head -> Torso -> Legs
+                const turnDuration = 3.0;
+                const cycle = stateTime % turnDuration;
+                const targetAng = Math.PI / 2; 
+                
+                if (cycle < 0.5) {
+                    target.headY = targetAng * (cycle / 0.5);
+                    target.torsoY = 0;
+                    target.robotRotY = 0;
+                } else if (cycle < 1.0) {
+                    target.headY = targetAng;
+                    target.torsoY = targetAng * 0.5 * ((cycle - 0.5) / 0.5);
+                    target.robotRotY = 0;
+                } else if (cycle < 2.0) {
+                    const p = (cycle - 1.0) / 1.0;
+                    target.robotRotY = targetAng * p;
+                    // Counter-rotate to stay looking at target while body catches up
+                    target.headY = targetAng * (1 - p); 
+                    target.torsoY = (targetAng * 0.5) * (1 - p);
+                    
+                    // Stepping motion
+                    target.lHipX = Math.sin(p * Math.PI * 4) * 0.15;
+                    target.rHipX = Math.sin((p * Math.PI * 4) + Math.PI) * 0.15;
+                    target.pelvisY = basePose.pelvisY + Math.abs(Math.sin(p * Math.PI * 4)) * 0.03;
+                } else {
+                    target.robotRotY = targetAng;
+                    target.headY = 0;
+                    target.torsoY = 0;
+                    target.lHipX = 0; target.rHipX = 0;
+                    target.pelvisY = basePose.pelvisY;
+                }
+                
+                if (stateTime > turnDuration) {
+                    robot.rotation.y += targetAng; // Lock in the new rotation
+                    stateTime = 0;
+                    target.robotRotY = 0;
+                }
+            }
+
+            // Apply Smooth Interpolation (LERP)
+            const lerpSpeed = (currentState === 'walk' || currentState === 'run') ? 0.2 : 0.1;
+            
+            pelvis.position.y = THREE.MathUtils.lerp(pelvis.position.y, target.pelvisY, lerpSpeed);
+            torsoJoint.rotation.x = THREE.MathUtils.lerp(torsoJoint.rotation.x, target.torsoX, lerpSpeed);
+            torsoJoint.rotation.y = THREE.MathUtils.lerp(torsoJoint.rotation.y, target.torsoY, lerpSpeed);
+            headJoint.rotation.x = THREE.MathUtils.lerp(headJoint.rotation.x, target.headX, lerpSpeed);
+            headJoint.rotation.y = THREE.MathUtils.lerp(headJoint.rotation.y, target.headY, lerpSpeed);
+            
+            lShoulder.rotation.x = THREE.MathUtils.lerp(lShoulder.rotation.x, target.lShoulderX, lerpSpeed);
+            lShoulder.rotation.z = THREE.MathUtils.lerp(lShoulder.rotation.z, target.lShoulderZ, lerpSpeed);
+            lElbow.rotation.x = THREE.MathUtils.lerp(lElbow.rotation.x, target.lElbowX, lerpSpeed);
+            
+            rShoulder.rotation.x = THREE.MathUtils.lerp(rShoulder.rotation.x, target.rShoulderX, lerpSpeed);
+            rShoulder.rotation.z = THREE.MathUtils.lerp(rShoulder.rotation.z, target.rShoulderZ, lerpSpeed);
+            rElbow.rotation.x = THREE.MathUtils.lerp(rElbow.rotation.x, target.rElbowX, lerpSpeed);
+            
+            lHip.rotation.x = THREE.MathUtils.lerp(lHip.rotation.x, target.lHipX, lerpSpeed);
+            lKnee.rotation.x = THREE.MathUtils.lerp(lKnee.rotation.x, target.lKneeX, lerpSpeed);
+            rHip.rotation.x = THREE.MathUtils.lerp(rHip.rotation.x, target.rHipX, lerpSpeed);
+            rKnee.rotation.x = THREE.MathUtils.lerp(rKnee.rotation.x, target.rKneeX, lerpSpeed);
+
+            if(currentState === 'turn') {
+                 robot.rotation.y = THREE.MathUtils.lerp(robot.rotation.y, Math.floor(robot.rotation.y / (Math.PI/2)) * (Math.PI/2) + target.robotRotY, lerpSpeed);
+            } else if (currentState !== 'turn') {
+                robot.rotation.y = THREE.MathUtils.lerp(robot.rotation.y, 0, 0.05); // Face forward naturally
+            }
+
+            // Fake telemetry updates for immersion
+            if(Math.random() > 0.95) {
+                 if(currentState !== 'neck') document.getElementById('tel-yaw').innerText = (headJoint.rotation.y * 180 / Math.PI).toFixed(2) + '°';
+                 const temp = 40 + (currentState === 'run' ? Math.random()*15 : Math.random()*5);
+                 document.getElementById('tel-temp').innerText = temp.toFixed(1) + '°C';
+                 document.getElementById('tel-temp').className = temp > 45 ? 'text-red-500 font-bold' : 'text-orange-400';
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateAnimation();
+            
+            // Spin the grabbed object slightly for effect
+            if(currentState !== 'grab' || objAttachedToHand) {
+                grabObjGroup.rotation.y += 0.01;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('loader').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loader').style.display = 'none';
+                    animate();
+                }, 1500);
+            }, 2000);
+        };
+    </script>
+</body>
+</html>
